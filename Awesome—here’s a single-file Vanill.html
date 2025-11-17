@@ -1,0 +1,493 @@
+Awesome—here’s a **single-file Vanilla JS / HTML / CSS** implementation of the **Data Protection & Privacy** risk questionnaire (DP-1 … DP-10) that computes an **overall rating (High / Medium / Low)** using the aggregation rules we discussed.
+
+It includes:
+
+* Clean table layout (Nr, Question, Role, Answer, Notes)
+* Live scoring with explicit aggregation rules
+* Per-question badges & overall result with rationale
+* Save/Load to browser (localStorage)
+* Export/Import JSON, and Print
+
+Just copy this into a `.html` file and open it in your browser.
+
+```html
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AI Impact Assessment – Data Protection & Privacy (ISO/IEC 42001)</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#151933; --panel-2:#1b2147; --text:#e9ecf1; --muted:#b8bfd4;
+    --accent:#6ea8fe; --ok:#3ecf8e; --warn:#ffd166; --bad:#ff6b6b; --line:#2a3164;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+    color:var(--text); background:linear-gradient(180deg,#0e1226, #0b1030 45%, #0a0d28);
+  }
+  header{
+    padding:24px; border-bottom:1px solid var(--line);
+    background:radial-gradient(1200px 600px at 100% -10%,rgba(110,168,254,.12),transparent);
+  }
+  h1{margin:0 0 6px; font-size:22px; letter-spacing:.2px}
+  .sub{color:var(--muted); font-size:14px}
+  .wrap{max-width:1200px; margin:20px auto; padding:0 20px 80px}
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:16px 0 10px;
+  }
+  .card{
+    background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.0));
+    border:1px solid var(--line); border-radius:14px; padding:14px 14px; box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  table{
+    width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:12px; border:1px solid var(--line);
+  }
+  thead th{
+    text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+    background:var(--panel-2); padding:12px 10px; position:sticky; top:0; z-index:2;
+  }
+  tbody td{
+    padding:10px; border-top:1px solid var(--line); vertical-align:top; background:rgba(10,12,30,.35);
+  }
+  tbody tr:nth-child(odd) td{ background:rgba(14,18,38,.55) }
+  .qcode{font-weight:600; color:#cbd6ff}
+  select, textarea, input[type="file"]{
+    width:100%; padding:8px 10px; background:#0d1333; color:var(--text);
+    border:1px solid #2c3572; border-radius:10px; outline:none;
+  }
+  textarea{min-height:64px; resize:vertical}
+  .role{font-size:12px; color:var(--muted)}
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px;
+    font-weight:600; font-size:12px; border:1px solid transparent;
+  }
+  .b-low{color:#d6ffe8; background:rgba(62,207,142,.12); border-color:rgba(62,207,142,.25)}
+  .b-med{color:#fff3d4; background:rgba(255,209,102,.12); border-color:rgba(255,209,102,.25)}
+  .b-high{color:#ffe3e3; background:rgba(255,107,107,.12); border-color:rgba(255,107,107,.25)}
+  .b-na{color:#cdd3ea; background:rgba(110,168,254,.12); border-color:rgba(110,168,254,.25)}
+  .result{
+    display:flex; flex-wrap:wrap; gap:14px; align-items:center; padding:14px 16px; border-radius:12px;
+    background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01)); border:1px solid var(--line);
+  }
+  .result h2{margin:0; font-size:18px}
+  .result .pill{font-size:14px; font-weight:700; padding:6px 10px; border-radius:999px; border:1px solid transparent}
+  .pill-low{background:rgba(62,207,142,.15); border-color:rgba(62,207,142,.25)}
+  .pill-med{background:rgba(255,209,102,.15); border-color:rgba(255,209,102,.25)}
+  .pill-high{background:rgba(255,107,107,.15); border-color:rgba(255,107,107,.25)}
+  .muted{color:var(--muted)}
+  .grid{display:grid; gap:12px}
+  .grid.cols-3{grid-template-columns:repeat(3,1fr)}
+  button{
+    background:linear-gradient(180deg,#2c57ff,#1e38b9); color:white; border:0; border-radius:10px; padding:10px 14px;
+    font-weight:600; cursor:pointer; transition:transform .02s ease;
+    box-shadow:0 8px 20px rgba(46,90,255,.25), inset 0 0 0 1px rgba(255,255,255,.15);
+  }
+  button:active{transform:translateY(1px)}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text)}
+  .small{font-size:12px}
+  .right{margin-left:auto}
+  .hint{font-size:12px; color:var(--muted)}
+  .footer-note{margin-top:14px; font-size:12px; color:var(--muted)}
+  @media (max-width:900px){
+    .grid.cols-3{grid-template-columns:1fr}
+    thead{display:none}
+    table, tbody, tr, td{display:block; width:100%}
+    tbody td{border-top:0; border-bottom:1px solid var(--line)}
+    tbody tr{margin-bottom:10px; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+    tbody td[data-th]::before{
+      content:attr(data-th) " "; display:block; font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;
+    }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>AI Impact Assessment – Data Protection &amp; Privacy</h1>
+      <div class="sub">ISO/IEC 42001 · Baseline/Detailed Assessment · Rollen: BS Ideator, AI Coordinator, DPO</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="result card" id="overallBox" aria-live="polite">
+      <h2>Gesamtergebnis: <span id="overallPill" class="pill pill-low">Low</span></h2>
+      <div id="overallRationale" class="muted">Wird live aus Antworten aggregiert …</div>
+      <div class="right hint">Regeln: (a) DP-2=High oder DP-4=High ⇒ Gesamt=High · (b) ≥2 High ⇒ High · (c) 1 High oder ≥2 Medium ⇒ Medium · (d) sonst Low</div>
+    </div>
+
+    <div class="toolbar">
+      <button id="saveBtn">Speichern (Browser)</button>
+      <button id="loadBtn" class="btn-ghost">Laden</button>
+      <button id="exportBtn" class="btn-ghost">Export JSON</button>
+      <label class="btn-ghost" style="display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; cursor:pointer;">
+        JSON importieren
+        <input id="importFile" type="file" accept="application/json" style="display:none">
+      </label>
+      <button id="printBtn" class="btn-ghost">Drucken</button>
+      <span class="hint">Änderungen werden live bewertet.</span>
+    </div>
+
+    <section class="card" style="margin-top:14px">
+      <table id="qTable" aria-describedby="overallBox">
+        <thead>
+          <tr>
+            <th style="width:80px;">Nr.</th>
+            <th>Frage</th>
+            <th style="width:170px;">Rolle / Kontext</th>
+            <th style="width:220px;">Antwort</th>
+            <th style="width:120px;">Status</th>
+            <th style="width:280px;">Notizen</th>
+          </tr>
+        </thead>
+        <tbody id="qBody"></tbody>
+      </table>
+      <div class="footer-note">
+        Hinweis: „Status“ zeigt die einzelne Risikoeinstufung an (Low / Medium / High / n. a.) je Frage.
+      </div>
+    </section>
+
+    <section class="grid cols-3" style="margin-top:18px;">
+      <div class="card">
+        <h3 style="margin:0 0 8px;">Zählung</h3>
+        <div class="muted small" id="countsText">High: 0 · Medium: 0 · Low: 0 · n. a.: 10</div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px;">Pfadabhängigkeiten</h3>
+        <div class="small muted">
+          <ul style="margin:0 0 0 18px;">
+            <li><b>DP-2 (Rechtsgrundlage)</b> = High ⇒ Gesamt High</li>
+            <li><b>DP-4 (DPIA)</b> = High ⇒ Gesamt High</li>
+            <li>≥ 2 High insgesamt ⇒ Gesamt High</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px;">Review & Governance</h3>
+        <div class="small muted">
+          Ideator beantwortet DP-1,3,9 · AI Coordinator/DPO verifizieren DP-2,4,5,6,7,8,10.
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+/* =========================
+   Model: Questions & Logic
+   ========================= */
+const QUESTIONS = [
+  {
+    code:"DP-1",
+    role:"Ideator",
+    text:"Werden personenbezogene Daten im Rahmen des KI-Systems verarbeitet?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Nein, vollständig anonymisiert / nur nicht-personenbezogene Daten"},
+      {v:"MED", label:"Ja, allgemeine personenbezogene Daten"},
+      {v:"HIGH", label:"Ja, sensible Daten (Gesundheit, biometrisch, besonders schutzwürdig)"}
+    ],
+    help:"Identifiziert Grundrisiko (DSGVO-Relevanz)."
+  },
+  {
+    code:"DP-2",
+    role:"AI Coordinator / Legal",
+    text:"Liegt eine Rechtsgrundlage für die Datenverarbeitung vor (z. B. Vertrag, Einwilligung, berechtigtes Interesse)?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Ja, klar definiert und dokumentiert"},
+      {v:"MED", label:"Vorhanden, aber (noch) nicht vollständig dokumentiert"},
+      {v:"HIGH", label:"Unklar oder fehlt"}
+    ],
+    help:"Rechtsbasis ist kritisch. HIGH erzwingt Gesamt=High."
+  },
+  {
+    code:"DP-3",
+    role:"Ideator",
+    text:"Wurden Daten anonymisiert oder pseudonymisiert, bevor sie verarbeitet / trainiert werden?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Vollständige Anonymisierung oder synthetische Daten"},
+      {v:"MED", label:"Teilweise Pseudonymisierung"},
+      {v:"HIGH", label:"Keine Anonymisierung"}
+    ],
+    help:"Minimierungsprinzip (Privacy by Design)."
+  },
+  {
+    code:"DP-4",
+    role:"AI Coordinator / DPO",
+    text:"Wird eine Data Protection Impact Assessment (DPIA) durchgeführt oder ist sie erforderlich?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"DPIA durchgeführt / nicht erforderlich"},
+      {v:"MED", label:"DPIA in Arbeit"},
+      {v:"HIGH", label:"DPIA erforderlich, aber nicht vorhanden"}
+    ],
+    help:"DPIA ist kritisch. HIGH erzwingt Gesamt=High."
+  },
+  {
+    code:"DP-5",
+    role:"AI Coordinator / IT",
+    text:"Werden Daten ausschließlich innerhalb der EU/EWR verarbeitet?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Ja, ausschließlich EU/EWR"},
+      {v:"MED", label:"EU/EWR mit Standardvertragsklauseln / gleichwertige Garantien"},
+      {v:"HIGH", label:"Drittland ohne angemessenes Schutzniveau"}
+    ],
+    help:"Datenübertragung in Drittländer."
+  },
+  {
+    code:"DP-6",
+    role:"AI Coordinator",
+    text:"Sind Auftragsverarbeiter (Processor) oder Sub-Processor eingebunden?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Nein"},
+      {v:"MED", label:"Ja, vertraglich geregelt und transparent"},
+      {v:"HIGH", label:"Ja, mehrere / unklare Transparenz"}
+    ],
+    help:"Risiko externer Zugriffe & Kettenverarbeitung."
+  },
+  {
+    code:"DP-7",
+    role:"AI Coordinator / IT Security",
+    text:"Sind angemessene technische & organisatorische Maßnahmen (TOMs) implementiert (Verschlüsselung, Zugriffskontrollen, Logging)?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"ISO-27001-Niveau / Zero Trust / Härtung"},
+      {v:"MED", label:"Standard-IT-Kontrollen vorhanden"},
+      {v:"HIGH", label:"Fehlende oder schwache Maßnahmen"}
+    ],
+    help:"Schutzniveau während Verarbeitung."
+  },
+  {
+    code:"DP-8",
+    role:"AI Coordinator",
+    text:"Gibt es dokumentierte Data Retention-/Löschkonzepte mit regelmäßiger Überprüfung?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Automatisierte Löschung / Retention dokumentiert"},
+      {v:"MED", label:"Policy vorhanden, Anwendung unregelmäßig"},
+      {v:"HIGH", label:"Keine Policy / keine Umsetzung"}
+    ],
+    help:"Lebenszyklus & Datenminimierung."
+  },
+  {
+    code:"DP-9",
+    role:"Ideator",
+    text:"Werden synthetische oder aggregierte Daten zur Risikoreduktion eingesetzt?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Hauptsächlich synthetisch / aggregiert"},
+      {v:"MED", label:"Teilweise synthetisch / aggregiert"},
+      {v:"HIGH", label:"Ausschließlich Originaldaten"}
+    ],
+    help:"Risikoreduktionsmaßnahme."
+  },
+  {
+    code:"DP-10",
+    role:"AI Coordinator",
+    text:"Sind Rollen (Controller, Processor, Data Owner, Data Steward) klar dokumentiert?",
+    options:[
+      {v:"", label:"Bitte auswählen"},
+      {v:"LOW", label:"Ja, klar dokumentiert (Governance-Register)"},
+      {v:"MED", label:"Teilweise definiert"},
+      {v:"HIGH", label:"Unklar / nicht dokumentiert"}
+    ],
+    help:"Verantwortlichkeiten & Nachvollziehbarkeit."
+  }
+];
+
+const STORAGE_KEY = "aia_dp_privacy_v1";
+
+/* =========================
+   Render
+   ========================= */
+const bodyEl = document.getElementById("qBody");
+
+function badgeFor(value){
+  if(value==="HIGH") return '<span class="badge b-high">High</span>';
+  if(value==="MED")  return '<span class="badge b-med">Medium</span>';
+  if(value==="LOW")  return '<span class="badge b-low">Low</span>';
+  return '<span class="badge b-na">n. a.</span>';
+}
+
+function renderTable(state){
+  bodyEl.innerHTML = "";
+  QUESTIONS.forEach(q=>{
+    const row = document.createElement("tr");
+
+    const tdCode = document.createElement("td");
+    tdCode.setAttribute("data-th","Nr.");
+    tdCode.innerHTML = `<div class="qcode">${q.code}</div>`;
+    row.appendChild(tdCode);
+
+    const tdQ = document.createElement("td");
+    tdQ.setAttribute("data-th","Frage");
+    tdQ.innerHTML = `<div style="font-weight:600">${q.text}</div><div class="hint">${q.help||""}</div>`;
+    row.appendChild(tdQ);
+
+    const tdRole = document.createElement("td");
+    tdRole.setAttribute("data-th","Rolle / Kontext");
+    tdRole.innerHTML = `<div class="role">${q.role}</div>`;
+    row.appendChild(tdRole);
+
+    const tdAns = document.createElement("td");
+    tdAns.setAttribute("data-th","Antwort");
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", q.code + " Antwort");
+    q.options.forEach(o=>{
+      const opt = document.createElement("option");
+      opt.value = o.v;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    });
+    sel.value = state[q.code]?.answer ?? "";
+    sel.addEventListener("change", ()=>{ state[q.code] = {...(state[q.code]||{}), answer: sel.value}; compute(state); saveDraft(state); });
+    tdAns.appendChild(sel);
+    row.appendChild(tdAns);
+
+    const tdStatus = document.createElement("td");
+    tdStatus.setAttribute("data-th","Status");
+    tdStatus.innerHTML = `<div id="status-${q.code}">${badgeFor(state[q.code]?.answer||"")}</div>`;
+    row.appendChild(tdStatus);
+
+    const tdNotes = document.createElement("td");
+    tdNotes.setAttribute("data-th","Notizen");
+    const ta = document.createElement("textarea");
+    ta.placeholder = "Relevante Hinweise, Belege, Links…";
+    ta.value = state[q.code]?.notes ?? "";
+    ta.addEventListener("input", ()=>{ state[q.code] = {...(state[q.code]||{}), notes: ta.value}; saveDraft(state); });
+    tdNotes.appendChild(ta);
+    row.appendChild(tdNotes);
+
+    bodyEl.appendChild(row);
+  });
+  compute(state);
+}
+
+/* =========================
+   Scoring / Aggregation
+   ========================= */
+function compute(state){
+  // Update per-row badges
+  QUESTIONS.forEach(q=>{
+    const v = state[q.code]?.answer || "";
+    const el = document.getElementById("status-"+q.code);
+    if(el) el.innerHTML = badgeFor(v);
+  });
+
+  // Tally
+  let cH=0, cM=0, cL=0, cNA=0;
+  QUESTIONS.forEach(q=>{
+    const v = state[q.code]?.answer || "";
+    if(v==="HIGH") cH++; else if(v==="MED") cM++; else if(v==="LOW") cL++; else cNA++;
+  });
+  document.getElementById("countsText").textContent = `High: ${cH} · Medium: ${cM} · Low: ${cL} · n. a.: ${cNA}`;
+
+  // Aggregation rules
+  const dp2 = state["DP-2"]?.answer || "";
+  const dp4 = state["DP-4"]?.answer || "";
+
+  let overall = "LOW";
+  let rationale = [];
+
+  if (dp2==="HIGH") { overall = "HIGH"; rationale.push("DP-2 (Rechtsgrundlage)=High"); }
+  if (dp4==="HIGH") { overall = "HIGH"; rationale.push("DP-4 (DPIA)=High"); }
+  if (overall!=="HIGH" && cH>=2) { overall = "HIGH"; rationale.push("≥2 High-Bewertungen"); }
+  if (overall!=="HIGH"){
+    if (cH===1 || cM>=2){ overall = "MED"; rationale.push(cH===1 ? "1× High" : "≥2 Medium"); }
+  }
+  if (overall==="LOW"){ rationale.push("Keine kritischen Befunde, robuste Maßnahmen"); }
+
+  const pill = document.getElementById("overallPill");
+  pill.className = "pill " + (overall==="HIGH"?"pill-high":overall==="MED"?"pill-med":"pill-low");
+  pill.textContent = overall==="HIGH"?"High":overall==="MED"?"Medium":"Low";
+
+  document.getElementById("overallRationale").textContent = "Begründung: " + rationale.join(" · ");
+}
+
+/* =========================
+   Persistence & IO
+   ========================= */
+function defaultState(){
+  const s={};
+  QUESTIONS.forEach(q=>{ s[q.code]={answer:"", notes:""}; });
+  return s;
+}
+
+function saveDraft(state){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+
+function loadDraft(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+
+function exportJSON(state){
+  const payload = {
+    meta:{
+      standard:"ISO/IEC 42001",
+      category:"Data Protection & Privacy",
+      generatedAt:new Date().toISOString()
+    },
+    responses: state
+  };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "aia_privacy_assessment.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSON(file, state){
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      const incoming = data.responses || data;
+      QUESTIONS.forEach(q=>{
+        if(incoming[q.code]){
+          state[q.code] = {
+            answer: incoming[q.code].answer || "",
+            notes: incoming[q.code].notes || ""
+          };
+        }
+      });
+      renderTable(state);
+      saveDraft(state);
+    }catch(err){ alert("Ungültige JSON-Datei."); }
+  };
+  reader.readAsText(file);
+}
+
+/* =========================
+   Bootstrap
+   ========================= */
+const state = loadDraft() || defaultState();
+renderTable(state);
+
+// Controls
+document.getElementById("saveBtn").addEventListener("click", ()=>{ saveDraft(state); alert("Gespeichert (Browser-Storage)."); });
+document.getElementById("loadBtn").addEventListener("click", ()=>{
+  const loaded = loadDraft();
+  if(loaded){ Object.assign(state, loaded); renderTable(state); }
+  else alert("Kein gespeicherter Stand gefunden.");
+});
+document.getElementById("exportBtn").addEventListener("click", ()=> exportJSON(state));
+document.getElementById("importFile").addEventListener("change", (e)=>{
+  const f = e.target.files?.[0]; if(f) importJSON(f, state);
+  e.target.value = "";
+});
+document.getElementById("printBtn").addEventListener("click", ()=> window.print());
+</script>
+</body>
+</html>
+```
